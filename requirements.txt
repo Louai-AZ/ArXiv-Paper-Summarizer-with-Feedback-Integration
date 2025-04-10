@@ -1,0 +1,11 @@
+streamlit>=1.32.2
+langsmith>=0.1.26
+langchain>=0.1.12
+langchainhub>=0.1.15
+langchain_community
+langchain-huggingface
+transformers
+streamlit-feedback
+arxiv
+pymupdf
+typing

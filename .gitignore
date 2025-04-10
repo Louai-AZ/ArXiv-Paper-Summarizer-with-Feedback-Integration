@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+/appV0.py
+/appV1.py
+/appV2.py
+/test.ipynb
+/notebook.ipynb
