@@ -17,6 +17,28 @@ The system is built using **Streamlit**, **LangChain**, **Langsmith** and **Hugg
 - 💬 Supports prompt updating and feedback-based optimization.
 
 ---
+ 
+## Project Structure
+
+```bash
+├── appV2.py                 # The whole application code (you can run this directly: streamlit run appV2.py)
+
+├── main.py                 # Entry point for the Streamlit app
+paper_summarizer/
+├── config.py               # Global constants and configuration
+├── arxiv_fetcher.py        # Logic to fetch arXiv paper content
+├── feedback.py             # Feedback handling and LangSmith interaction
+├── summarizer.py           # Summary generation logic
+├── utils.py                # Helper functions
+├── services/
+│   ├── langchain_service.py     # Langchain summarizer setup
+│   └── huggingface_service.py  # HuggingFace model setup
+├── .env                    # Your secret API keys
+├── requirements.txt        # Python dependencies
+└── README.md               # This file!
+```
+
+---
 
 ## Setup Instructions
 
