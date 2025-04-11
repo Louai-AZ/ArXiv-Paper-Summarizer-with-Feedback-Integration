@@ -176,6 +176,5 @@ cython_debug/
 .xtwit/
 /appV0.py
 /appV1.py
-/appV2.py
 /test.ipynb
 /notebook.ipynb
