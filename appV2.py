@@ -18,9 +18,12 @@ from langchainhub import Client as HubClient
 import logging
 import concurrent.futures
 from dotenv import load_dotenv
+import os
+from huggingface_hub import login
 
 
 # Load environment variables
+login(os.getenv('HUGGINGFACEHUB_API_TOKEN'))
 load_dotenv()
 
 # Setup logging for debugging and tracking
@@ -49,7 +52,7 @@ st.sidebar.markdown(f"[See Prompt in Hub]({prompt_url})")
 optimizer_prompt_url = f"https://smith.langchain.com/hub/{OPTIMIZER_PROMPT_NAME}"
 st.sidebar.markdown(f"[See Optimizer Prompt in Hub]({optimizer_prompt_url})")
 
-# Set up the LLMs (language models) for summarization and optimizer
+# Set up the LLMs for summarization and optimizer
 repo_id = "mistralai/Mistral-7B-Instruct-v0.2"
 temperature = st.sidebar.slider("Temperature", 0.0, 1.5, 1.0, 0.1)
 chat_llm = HuggingFaceEndpoint(repo_id=repo_id, task="text-generation", temperature=temperature)
@@ -102,21 +105,31 @@ def fetch_arxiv_full_text(paper_id: str) -> str:
 
 # Parse the summary and allow editing for feedback
 def parse_summary(response: str, turn: int, box=None):
-    match = re.search(r"(.*?)<summary>(.*?)</summary>(.*?)", response.strip(), re.DOTALL)
     box = box or st
-    pre, summary, post = match.groups() if match else (response, None, None)
-    if pre:
-        box.markdown(pre)
-    if summary is not None:
+    match = re.search(r"(.*?)<summary>(.*?)</summary>(.*?)", response.strip(), re.DOTALL)
+
+    if match:
+        pre, summary, post = match.groups()
+        if pre:
+            box.markdown(pre)
+        box.markdown("✏️ **Modify if needed**: If the suggestion is close but needs tweaks, edit the summary directly in the text box before clicking 👍.")
         summary = st.text_area(
             "Edit this summary:",
             summary.strip(),
             key=f"summary_{turn}",
             height=400,
         )
-    if post:
-        box.markdown(post)
+        if post:
+            box.markdown(post)
+    else:
+        summary = st.text_area(
+            "Model response (editable fallback):",
+            response.strip(),
+            key=f"summary_fallback_{turn}",
+            height=400,
+        )
     return summary
+
 
 # Log feedback from the user and update the model
 def log_feedback(
@@ -200,6 +213,7 @@ def log_feedback(
             st.success("Summarizer updated!")
         concurrent.futures.wait(futures)
 
+
 # Display conversation messages and handle user feedback
 messages = st.session_state.get("langchain_messages", [])
 original_input = messages[0][1] if messages else None
@@ -214,7 +228,7 @@ for i, msg in enumerate(messages):
                     log_feedback,
                     presigned_url=presigned_url,
                     original_input=original_input,
-                    txt=updated,
+                    txt=updated,  
                 ),
                 key=f"fb_{i}",
             )

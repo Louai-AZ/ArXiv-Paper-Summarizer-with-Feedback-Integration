@@ -90,7 +90,7 @@ Go to: http://localhost:8501
 
 3. **Provide Feedback**
    - 👍 **Like the suggestion**: Click the thumbs-up button to save the modified summary as an approved example.
-   - 👎 **Dislike the suggestion**: Click the thumbs-down button or respond to the chatbot with your requested changes.
+   - 👎 **Dislike the suggestion**: Click the thumbs-down button.
    - ✏️ **Modify if needed**: If the suggestion is close but needs tweaks, edit the summary directly in the text box before clicking 👍.
 
    > ⚠️ **Note**: Once you click either **👍** or **👎**, the conversation ends, and the bot will no longer respond in that session.
