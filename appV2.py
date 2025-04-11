@@ -20,27 +20,26 @@ import concurrent.futures
 from dotenv import load_dotenv
 
 
-
-from huggingface_hub import login
-login("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")
+# Load environment variables
 load_dotenv()
 
+# Setup logging for debugging and tracking
 logging.basicConfig(level=logging.INFO)
 st.set_page_config(
-    page_title="Paper Summarizer with Feedback",
-    page_icon="📄🧠",
+    page_title="Paper Summarizer with Feedback",  # Set page title for Streamlit app
+    page_icon="📄🧠",  # Set app icon
 )
 
 logger = logging.getLogger(__name__)
 
-# Configs
+# Define dataset and prompt names
 DATASET_NAME = "Paper Summarizer"
 PROMPT_NAME = "louup/tweet-critic-fewshot"
 OPTIMIZER_PROMPT_NAME = "louup/convo-optimizer"
 NUM_FEWSHOTS = 10
 PROMPT_UPDATE_BATCHSIZE = 5
 
-# Sidebar
+# Sidebar UI setup
 st.sidebar.title("Session Information")
 prompt_version = st.sidebar.text_input("Prompt Version", value="latest")
 prompt_url = f"https://smith.langchain.com/hub/{PROMPT_NAME}"
@@ -50,13 +49,16 @@ st.sidebar.markdown(f"[See Prompt in Hub]({prompt_url})")
 optimizer_prompt_url = f"https://smith.langchain.com/hub/{OPTIMIZER_PROMPT_NAME}"
 st.sidebar.markdown(f"[See Optimizer Prompt in Hub]({optimizer_prompt_url})")
 
+# Set up the LLMs (language models) for summarization and optimizer
 repo_id = "mistralai/Mistral-7B-Instruct-v0.2"
 temperature = st.sidebar.slider("Temperature", 0.0, 1.5, 1.0, 0.1)
 chat_llm = HuggingFaceEndpoint(repo_id=repo_id, task="text-generation", temperature=temperature)
 optimizer_llm = HuggingFaceEndpoint(repo_id=repo_id, task="text-generation", temperature=temperature)
 
+# Initialize LangChain client to interact with dataset and example management
 client = Client()
 
+# Format examples for displaying in few-shot learning
 def _format_example(example):
     return f"""<example>
     <original>
@@ -67,6 +69,7 @@ def _format_example(example):
     </summary>
 </example>"""
 
+# Fetch few-shot examples for training from dataset
 def few_shot_examples():
     if client.has_dataset(dataset_name=DATASET_NAME):
         examples = list(client.list_examples(dataset_name=DATASET_NAME))
@@ -76,16 +79,19 @@ def few_shot_examples():
         return "\n".join([_format_example(e) for e in examples])
     return ""
 
+# Store the few-shot examples in session state for reuse
 if st.session_state.get("few_shots"):
     few_shots = st.session_state.get("few_shots")
 else:
     few_shots = few_shot_examples()
     st.session_state["few_shots"] = few_shots
 
+# Pull prompt template from LangChain Hub and format it with few-shot examples
 prompt = hub.pull(PROMPT_NAME + (f":{prompt_version}" if prompt_version and prompt_version != "latest" else ""))
 prompt = prompt.partial(examples=few_shots)
 summarizer = (prompt | chat_llm | StrOutputParser()).with_config(run_name="Summarizer")
 
+# Fetch the full text of a paper using arXiv ID
 def fetch_arxiv_full_text(paper_id: str) -> str:
     from langchain_community.document_loaders import ArxivLoader
     loader = ArxivLoader(query=paper_id, load_max_docs=1)
@@ -94,7 +100,7 @@ def fetch_arxiv_full_text(paper_id: str) -> str:
         raise ValueError("No paper found with that ID")
     return docs[0].page_content
 
-
+# Parse the summary and allow editing for feedback
 def parse_summary(response: str, turn: int, box=None):
     match = re.search(r"(.*?)<summary>(.*?)</summary>(.*?)", response.strip(), re.DOTALL)
     box = box or st
@@ -112,6 +118,7 @@ def parse_summary(response: str, turn: int, box=None):
         box.markdown(post)
     return summary
 
+# Log feedback from the user and update the model
 def log_feedback(
     value: dict,
     *args,
@@ -120,12 +127,15 @@ def log_feedback(
     txt: Optional[str] = None,
     **kwargs,
 ):
+    # Mark session as ended and thank the user
     st.session_state["session_ended"] = True
     st.write("Thank you for your feedback! Updating summarizer...")
+
+    # Use multithreading to handle feedback and model updates asynchronously
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
-        score = {"👍": 1, "👎": 0}.get(value["score"]) or 0
-        comment = value.get("text")
+        score = {"👍": 1, "👎": 0}.get(value["score"]) or 0  # Map thumbs to score
+        comment = value.get("text")  # Get comment text
         futures.append(
             executor.submit(
                 client.create_feedback_from_token,
@@ -135,6 +145,7 @@ def log_feedback(
             )
         )
 
+        # Create a new example for training the model if feedback is positive
         def create_example():
             try:
                 client.create_example(
@@ -155,6 +166,7 @@ def log_feedback(
         if score and original_input and txt:
             futures.append(executor.submit(create_example))
 
+        # Update the summarizer's instructions based on feedback
         with st.spinner("Updating instructions..."):
             def parse_updated_prompt(system_prompt_txt):
                 return system_prompt_txt.split("<improved_prompt>")[1].split("</improved_prompt>")[0].strip()
@@ -162,15 +174,18 @@ def log_feedback(
             def format_conversation(messages):
                 return "\n".join([f"<turn idx={i}>\n{msg[0]}: {msg[1]}\n</turn idx={i}>" for i, msg in enumerate(messages)])
 
+            # Fetch the latest prompt updates from LangChain Hub
             hub_client = HubClient()
             hashes = [c["commit_hash"] for c in hub_client.list_commits(PROMPT_NAME)["commits"][:PROMPT_UPDATE_BATCHSIZE]]
             updated_prompts = [hub.pull(f"{PROMPT_NAME}:{h}") for h in hashes]
             optimizer_prompt = hub.pull(OPTIMIZER_PROMPT_NAME)
 
+            # Optimize the prompt based on conversation history
             optimizer = (
                 optimizer_prompt | optimizer_llm | StrOutputParser() | parse_updated_prompt
             ).with_config(run_name="Optimizer")
 
+            # Format the conversation history for prompt update
             conversation = format_conversation(st.session_state.get("langchain_messages", []))
             if score:
                 conversation = f'<rating>User rated this {value["score"]}</rating>\n\n' + conversation
@@ -185,6 +200,7 @@ def log_feedback(
             st.success("Summarizer updated!")
         concurrent.futures.wait(futures)
 
+# Display conversation messages and handle user feedback
 messages = st.session_state.get("langchain_messages", [])
 original_input = messages[0][1] if messages else None
 for i, msg in enumerate(messages):
@@ -207,8 +223,11 @@ for i, msg in enumerate(messages):
             st.markdown(msg[1])
             presigned_url = None
 
+# Generate a unique ID for the run and prepare for feedback
 run_id = uuid.uuid4()
 presigned = client.create_presigned_feedback_token(run_id, feedback_key="summary_quality")
+
+# Handle session end and reset
 if st.session_state.get("session_ended"):
     st.write("Thanks for the feedback! This session has ended.")
     if st.button("Reset"):
