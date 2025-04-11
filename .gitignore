@@ -173,6 +173,7 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+.xtwit/
 /appV0.py
 /appV1.py
 /appV2.py
